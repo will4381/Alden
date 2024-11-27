@@ -5,6 +5,7 @@ import yfinance as yf
 from tqdm import tqdm
 import warnings
 import sys
+import time
 warnings.filterwarnings('ignore')
 
 def log_message(msg):
@@ -14,6 +15,28 @@ def log_message(msg):
 def debug_log(msg):
     print(f"DEBUG: {msg}")
     sys.stdout.flush()
+
+def download_with_retry(ticker, start_date, end_date, max_retries=3):
+    """Download data with retry logic"""
+    for attempt in range(max_retries):
+        try:
+            data = yf.download(
+                ticker,
+                start=start_date,
+                end=end_date,
+                interval='1m',
+                progress=False
+            )
+            if len(data) > 0:
+                return data
+        except Exception as e:
+            if attempt < max_retries - 1:
+                log_message(f"Attempt {attempt + 1} failed, retrying in 5 seconds...")
+                time.sleep(5)
+            else:
+                log_message(f"Failed to download data after {max_retries} attempts: {str(e)}")
+        
+    return None
 
 class AdvancedPremiumArbitrageStrategy:
     def __init__(self, initial_capital=100000, base_risk_per_trade=0.03):
@@ -78,9 +101,9 @@ class AdvancedPremiumArbitrageStrategy:
         
         return max(1, min(contracts, 30))  # Increased max contracts
 
-    def calculate_intraday_indicators(self, data):
-        close = data['Close']
-        volume = data['Volume']
+    def calculate_intraday_indicators(self, data, ticker):
+        close = data[('Close', ticker)]
+        volume = data[('Volume', ticker)]
         
         # Fast moving averages
         ema_1m = close.ewm(span=1, adjust=False).mean()
@@ -104,8 +127,8 @@ class AdvancedPremiumArbitrageStrategy:
             'volume_ratio': volume_ratio
         }
 
-    def calculate_intraday_volatility_score(self, data):
-        returns = data['Close'].pct_change()
+    def calculate_intraday_volatility_score(self, data, ticker):
+        returns = data[('Close', ticker)].pct_change()
         vol_5m = returns.rolling(5).std() * np.sqrt(390)
         vol_15m = returns.rolling(15).std() * np.sqrt(390)
         vol_ratio = vol_5m / vol_15m
@@ -119,11 +142,11 @@ class AdvancedPremiumArbitrageStrategy:
 
     def should_sell_premium(self, ticker, data):
         """Enhanced premium selling decision with more aggressive entry"""
-        indicators = self.calculate_intraday_indicators(data)
-        vol_ratio, vol_regime, vol_cluster = self.calculate_intraday_volatility_score(data)
+        indicators = self.calculate_intraday_indicators(data, ticker)
+        vol_ratio, vol_regime, vol_cluster = self.calculate_intraday_volatility_score(data, ticker)
         
         # Market condition analysis
-        current_price = data['Close'].iloc[-1]
+        current_price = data[('Close', ticker)].iloc[-1]
         current_rsi = indicators['rsi'].iloc[-1]
         volume_ratio = indicators['volume_ratio'].iloc[-1]
         
@@ -241,22 +264,23 @@ class AdvancedBacktester:
         self.results = {}
 
     def get_recent_data(self):
-        """Get most recent 8 days of intraday data"""
+        """Get most recent 8 days of intraday data with retry logic"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=8)
         
-        try:
-            data = yf.download(
-                self.ticker,
-                start=start_date.strftime('%Y-%m-%d'),
-                end=end_date.strftime('%Y-%m-%d'),
-                interval='1m',
-                progress=False
-            )
-            return data
-        except Exception as e:
-            log_message(f"Error fetching data for {self.ticker}: {str(e)}")
+        log_message(f"Downloading data for {self.ticker} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        
+        data = download_with_retry(
+            self.ticker,
+            start_date.strftime('%Y-%m-%d'),
+            end_date.strftime('%Y-%m-%d')
+        )
+        
+        if data is None or len(data) < 100:
+            log_message(f"Insufficient data points for {self.ticker}")
             return None
+            
+        return data
 
     def simulate_option_data(self, data):
         """Enhanced option data simulation with proper array handling and debugging"""
@@ -265,7 +289,7 @@ class AdvancedBacktester:
             debug_log(f"Input data shape: {data.shape}")
             
             # Calculate returns and volatility
-            returns = data['Close'].pct_change().fillna(0)
+            returns = data[('Close', self.ticker)].pct_change().fillna(0)
             debug_log(f"Returns shape before conversion: {returns.shape}")
             
             # Convert returns to 1D numpy array
@@ -286,7 +310,7 @@ class AdvancedBacktester:
             
             # Calculate option prices
             atm_factor = pd.Series(1 - np.abs(returns_array), index=data.index)
-            base_prices = pd.Series(data['Close'].to_numpy().flatten() * 0.05, index=data.index)
+            base_prices = pd.Series(data[('Close', self.ticker)].to_numpy().flatten() * 0.05, index=data.index)
             option_prices = base_prices * (1 + iv) * atm_factor
             
             # Calculate time decay
@@ -302,8 +326,8 @@ class AdvancedBacktester:
             
             # Create result DataFrame
             result = pd.DataFrame({
-                'implied_volatility': iv * 100,  # Convert to percentage
-                'option_price': option_prices
+                ('implied_volatility', self.ticker): iv * 100,  # Convert to percentage
+                ('option_price', self.ticker): option_prices
             }, index=data.index)
             
             debug_log(f"Final result shape: {result.shape}")
@@ -317,13 +341,24 @@ class AdvancedBacktester:
     def run(self):
         log_message(f"\nProcessing {self.ticker}...")
         
+        # Get market data
         data = self.get_recent_data()
         if data is None or len(data) < 100:
             log_message(f"Insufficient data for {self.ticker}")
             return
-            
+        
+        debug_log(f"Original data columns: {data.columns.tolist()}")
+        
+        # Store original columns
+        market_data = data.copy()
+        
+        # Get option data
         option_data = self.simulate_option_data(data)
-        data = pd.concat([data, option_data], axis=1)
+        debug_log(f"Option data columns: {option_data.columns.tolist()}")
+        
+        # Combine data while preserving original columns
+        data = pd.concat([market_data, option_data], axis=1)
+        debug_log(f"Combined data columns: {data.columns.tolist()}")
         
         self.strategy.initialize_ticker_metrics(self.ticker)
         
@@ -331,7 +366,7 @@ class AdvancedBacktester:
             current_data = data.iloc[:i+1]
             
             if self.ticker in self.strategy.positions:
-                current_price = current_data['option_price'].iloc[-1]
+                current_price = current_data[('option_price', self.ticker)].iloc[-1]
                 position = self.strategy.positions[self.ticker]
                 
                 if self.strategy.should_buy_back(self.ticker, position['entry_price'], 
@@ -342,8 +377,8 @@ class AdvancedBacktester:
             
             elif self.ticker not in self.strategy.positions:
                 if self.strategy.should_sell_premium(self.ticker, current_data):
-                    price = current_data['option_price'].iloc[-1]
-                    volatility = (data['Close'].pct_change().std() * np.sqrt(252 * 390) * 100).item()
+                    price = current_data[('option_price', self.ticker)].iloc[-1]
+                    volatility = (data[('Close', self.ticker)].pct_change().std() * np.sqrt(252 * 390) * 100).item()
                     contracts = self.strategy.calculate_position_size(
                         self.ticker, price, volatility,
                         self.strategy.ticker_metrics[self.ticker]['profit_factor']
@@ -402,26 +437,33 @@ if __name__ == "__main__":
     log_message("High-frequency trading with 1-minute resolution")
     
     # Initialize strategy with single ticker
-    ticker = "MSTR"  # Example ticker
-    strategy = AdvancedPremiumArbitrageStrategy(initial_capital=100000)
+    ticker = "GME"  # Example ticker
+    strategy = AdvancedPremiumArbitrageStrategy(initial_capital=20000)
     
     # Setup and run backtest
     backtester = AdvancedBacktester(strategy=strategy, ticker=ticker)
     
-    # Run backtest
-    backtester.run()
-    
-    # Print results
-    log_message("\nBacktest Results:")
-    log_message("=" * 50)
-    log_message(f"Final Capital: ${backtester.results['final_capital']:,.2f}")
-    log_message(f"Total Return: {backtester.results['total_return']:.2f}%")
-    log_message(f"Annualized Return: {backtester.results['annual_return']:.2f}%")
-    log_message(f"Win Rate: {backtester.results['win_rate']*100:.2f}%")
-    log_message(f"Max Drawdown: ${backtester.results['max_drawdown']:,.2f} ({backtester.results['max_drawdown_pct']:.2f}%)")
-    log_message(f"Max Drawdown Duration: {backtester.results['max_drawdown_duration']:.0f} periods")
-    log_message(f"Total Trades: {backtester.results['total_trades']}")
-    log_message(f"Average Profit per Trade: ${backtester.results['avg_profit_per_trade']:,.2f}")
-    log_message(f"Profit Factor: {backtester.results['profit_factor']:.2f}")
-    log_message(f"Sharpe Ratio: {backtester.results['sharpe_ratio']:.2f}")
-    log_message(f"Sortino Ratio: {backtester.results['sortino_ratio']:.2f}")
+    try:
+        # Run backtest
+        backtester.run()
+        
+        # Only print results if we have them
+        if hasattr(backtester, 'results') and backtester.results:
+            log_message("\nBacktest Results:")
+            log_message("=" * 50)
+            log_message(f"Final Capital: ${backtester.results['final_capital']:,.2f}")
+            log_message(f"Total Return: {backtester.results['total_return']:.2f}%")
+            log_message(f"Annualized Return: {backtester.results['annual_return']:.2f}%")
+            log_message(f"Win Rate: {backtester.results['win_rate']*100:.2f}%")
+            log_message(f"Max Drawdown: ${backtester.results['max_drawdown']:,.2f} ({backtester.results['max_drawdown_pct']:.2f}%)")
+            log_message(f"Max Drawdown Duration: {backtester.results['max_drawdown_duration']:.0f} periods")
+            log_message(f"Total Trades: {backtester.results['total_trades']}")
+            log_message(f"Average Profit per Trade: ${backtester.results['avg_profit_per_trade']:,.2f}")
+            log_message(f"Profit Factor: {backtester.results['profit_factor']:.2f}")
+            log_message(f"Sharpe Ratio: {backtester.results['sharpe_ratio']:.2f}")
+            log_message(f"Sortino Ratio: {backtester.results['sortino_ratio']:.2f}")
+        else:
+            log_message("\nBacktest did not complete successfully. No results to display.")
+    except Exception as e:
+        log_message(f"\nError during backtest: {str(e)}")
+        sys.exit(1)
