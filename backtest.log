@@ -1,0 +1,33 @@
+2024-11-29 14:31:25,855 [INFO] Initializing Advanced Premium Arbitrage Strategy Backtest
+2024-11-29 14:31:25,856 [INFO] 
+============================================================
+Backtesting GME
+============================================================
+2024-11-29 14:31:25,856 [INFO] Starting backtest for GME...
+2024-11-29 14:31:25,856 [INFO] Downloading data for GME from 2024-09-30 to 2024-11-29
+2024-11-29 14:33:47,896 [ERROR] 
+1 Failed download:
+2024-11-29 14:33:47,898 [ERROR] ['GME']: YFPricesMissingError('$%ticker%: possibly delisted; no price data found  (1m 2024-09-30 -> 2024-11-29) (Yahoo error = "1m data not available for startTime=1727668800 and endTime=1732856400. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")')
+2024-11-29 14:33:47,921 [ERROR] 
+1 Failed download:
+2024-11-29 14:33:47,921 [ERROR] ['GME']: YFPricesMissingError('$%ticker%: possibly delisted; no price data found  (1m 2024-09-30 -> 2024-11-29) (Yahoo error = "1m data not available for startTime=1727668800 and endTime=1732856400. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")')
+2024-11-29 14:33:47,935 [ERROR] 
+1 Failed download:
+2024-11-29 14:33:47,935 [ERROR] ['GME']: YFPricesMissingError('$%ticker%: possibly delisted; no price data found  (1m 2024-09-30 -> 2024-11-29) (Yahoo error = "1m data not available for startTime=1727668800 and endTime=1732856400. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")')
+2024-11-29 14:33:47,936 [WARNING] Insufficient data for GME
+2024-11-29 14:33:47,937 [INFO] 
+============================================================
+Backtesting MSTR
+============================================================
+2024-11-29 14:33:47,937 [INFO] Starting backtest for MSTR...
+2024-11-29 14:33:47,937 [INFO] Downloading data for MSTR from 2024-09-30 to 2024-11-29
+2024-11-29 14:33:48,974 [ERROR] 
+1 Failed download:
+2024-11-29 14:33:48,974 [ERROR] ['MSTR']: YFPricesMissingError('$%ticker%: possibly delisted; no price data found  (1m 2024-09-30 -> 2024-11-29) (Yahoo error = "1m data not available for startTime=1727668800 and endTime=1732856400. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")')
+2024-11-29 14:33:48,986 [ERROR] 
+1 Failed download:
+2024-11-29 14:33:48,986 [ERROR] ['MSTR']: YFPricesMissingError('$%ticker%: possibly delisted; no price data found  (1m 2024-09-30 -> 2024-11-29) (Yahoo error = "1m data not available for startTime=1727668800 and endTime=1732856400. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")')
+2024-11-29 14:33:49,000 [ERROR] 
+1 Failed download:
+2024-11-29 14:33:49,000 [ERROR] ['MSTR']: YFPricesMissingError('$%ticker%: possibly delisted; no price data found  (1m 2024-09-30 -> 2024-11-29) (Yahoo error = "1m data not available for startTime=1727668800 and endTime=1732856400. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")')
+2024-11-29 14:33:49,001 [WARNING] Insufficient data for MSTR
