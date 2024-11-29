@@ -1,5 +1,3 @@
----
-
 ## Advanced Premium Arbitrage Strategy
 
 This strategy is designed to optimize premium selling in options trading by using risk management formulas, technical indicators, and machine learning predictions.
