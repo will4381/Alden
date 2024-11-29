@@ -17,7 +17,6 @@ def debug_log(msg):
     sys.stdout.flush()
 
 def download_with_retry(ticker, start_date, end_date, max_retries=3):
-    """Download data with retry logic"""
     for attempt in range(max_retries):
         try:
             data = yf.download(
@@ -71,35 +70,30 @@ class AdvancedPremiumArbitrageStrategy:
         self.initialize_ticker_metrics(ticker)
         metrics = self.ticker_metrics[ticker]
         
-        # More aggressive base risk for higher returns
         base_risk = self.capital * self.base_risk_per_trade * 1.5
         
-        # Adjust for intraday trading frequency
         if ticker in self.intraday_trade_count:
             daily_trades = self.intraday_trade_count[ticker].get(datetime.now().date(), 0)
-            frequency_factor = max(0.7, 1 - (daily_trades * 0.05))  # Less reduction in size
+            frequency_factor = max(0.7, 1 - (daily_trades * 0.05))
         else:
             frequency_factor = 1.0
         
-        # More aggressive volatility adjustment
-        vol_factor = np.clip(volatility / 40, 0.7, 2.5)  # Higher max factor
+        vol_factor = np.clip(volatility / 40, 0.7, 2.5)
         
-        # Performance-based adjustment
         streak_factor = 1.0
         if metrics['consecutive_wins'] >= 2:
-            streak_factor = 1.5  # More aggressive scaling on wins
+            streak_factor = 1.5
         elif metrics['consecutive_losses'] >= 2:
             streak_factor = 0.8
         
-        # Calculate final position size
         adjusted_risk = base_risk * vol_factor * streak_factor * frequency_factor
         contracts = int(adjusted_risk / (option_price * 100))
         
         # Scale based on capital growth
-        capital_factor = max(1.0, (self.capital / self.initial_capital) ** 1.5)  # More aggressive scaling
+        capital_factor = max(1.0, (self.capital / self.initial_capital) ** 1.5)
         contracts = int(contracts * capital_factor)
         
-        return max(1, min(contracts, 30))  # Increased max contracts
+        return max(1, min(contracts, 30))
 
     def calculate_intraday_indicators(self, data, ticker):
         close = data[('Close', ticker)]
@@ -141,7 +135,6 @@ class AdvancedPremiumArbitrageStrategy:
         return vol_ratio.iloc[-1], vol_regime[-1], vol_cluster.iloc[-1]
 
     def should_sell_premium(self, ticker, data):
-        """Enhanced premium selling decision with more aggressive entry"""
         indicators = self.calculate_intraday_indicators(data, ticker)
         vol_ratio, vol_regime, vol_cluster = self.calculate_intraday_volatility_score(data, ticker)
         
@@ -150,9 +143,8 @@ class AdvancedPremiumArbitrageStrategy:
         current_rsi = indicators['rsi'].iloc[-1]
         volume_ratio = indicators['volume_ratio'].iloc[-1]
         
-        # More aggressive entry conditions
-        high_volatility = vol_ratio > 1.1  # Lower threshold
-        volume_surge = volume_ratio > 1.3  # Lower threshold
+        high_volatility = vol_ratio > 1.1
+        volume_surge = volume_ratio > 1.3
         
         # Trend analysis
         ema_1m = indicators['ema_1m'].iloc[-1]
@@ -163,8 +155,8 @@ class AdvancedPremiumArbitrageStrategy:
         technical_condition = (
             high_volatility and
             volume_surge and
-            trend_strength > 0.0008 and  # Lower threshold
-            (25 < current_rsi < 75)  # Wider RSI range
+            trend_strength > 0.0008 and
+            (25 < current_rsi < 75)
         )
         
         # Trade frequency check
@@ -172,26 +164,24 @@ class AdvancedPremiumArbitrageStrategy:
         if ticker not in self.intraday_trade_count:
             self.intraday_trade_count[ticker] = {}
         daily_trades = self.intraday_trade_count[ticker].get(current_date, 0)
-        within_trade_limit = daily_trades < 15  # Increased trade limit
+        within_trade_limit = daily_trades < 15
         
         return technical_condition and within_trade_limit
 
     def should_buy_back(self, ticker, entry_price, current_price, data):
-        """Enhanced exit strategy with faster profit taking"""
         profit_pct = (entry_price - current_price) / entry_price
         
         # Dynamic profit targets
         if self.ticker_metrics[ticker]['consecutive_wins'] >= 2:
-            profit_target = 0.15  # Take profits faster after wins
+            profit_target = 0.15
         else:
             profit_target = 0.2
             
-        # Tighter stop loss
         stop_loss = -0.3
         
         # Time-based exit (shorter holding periods)
         minutes_held = (data.index[-1] - self.positions[ticker]['entry_date']).total_seconds() / 60
-        time_exit = minutes_held > 45  # Reduced holding time
+        time_exit = minutes_held > 45
         
         return profit_pct >= profit_target or profit_pct <= stop_loss or time_exit
 
@@ -264,7 +254,6 @@ class AdvancedBacktester:
         self.results = {}
 
     def get_recent_data(self):
-        """Get most recent 8 days of intraday data with retry logic"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=8)
         
@@ -283,7 +272,6 @@ class AdvancedBacktester:
         return data
 
     def simulate_option_data(self, data):
-        """Enhanced option data simulation with proper array handling and debugging"""
         try:
             debug_log(f"Starting option data simulation for {self.ticker}")
             debug_log(f"Input data shape: {data.shape}")
@@ -326,7 +314,7 @@ class AdvancedBacktester:
             
             # Create result DataFrame
             result = pd.DataFrame({
-                ('implied_volatility', self.ticker): iv * 100,  # Convert to percentage
+                ('implied_volatility', self.ticker): iv * 100,
                 ('option_price', self.ticker): option_prices
             }, index=data.index)
             
@@ -356,7 +344,6 @@ class AdvancedBacktester:
         option_data = self.simulate_option_data(data)
         debug_log(f"Option data columns: {option_data.columns.tolist()}")
         
-        # Combine data while preserving original columns
         data = pd.concat([market_data, option_data], axis=1)
         debug_log(f"Combined data columns: {data.columns.tolist()}")
         
@@ -436,18 +423,15 @@ if __name__ == "__main__":
     log_message("Using most recent 8 days of intraday data")
     log_message("High-frequency trading with 1-minute resolution")
     
-    # Initialize strategy with single ticker
-    ticker = "GME"  # Example ticker
+    # Ticker
+    ticker = "GME"
     strategy = AdvancedPremiumArbitrageStrategy(initial_capital=20000)
     
-    # Setup and run backtest
     backtester = AdvancedBacktester(strategy=strategy, ticker=ticker)
     
     try:
-        # Run backtest
         backtester.run()
         
-        # Only print results if we have them
         if hasattr(backtester, 'results') and backtester.results:
             log_message("\nBacktest Results:")
             log_message("=" * 50)
